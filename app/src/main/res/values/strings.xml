@@ -19,11 +19,13 @@
         <item>High-level logs</item>
     </string-array>
     <string-array name="category_list">
-        <item>1</item>
-        <item>2</item>
-        <item>3</item>
-        <item>4</item>
-        <item>5</item>
+        <item>male</item>
+        <item>female</item>
+        <item>white</item>
+        <item>black</item>
+        <item>eth3</item>
+        <item>eth4</item>
+        <item>eth5</item>
     </string-array>
     <string name="server_config">...</string>
 </resources>

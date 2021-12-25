@@ -243,7 +243,7 @@ public class Photos extends Fragment {
                     //res = photoProcessor.getImageAnalysisResultsFromServer(filename, bmp);
                     text.append(res.locations.toString()).append("\n\n");
 
-                    text.append(res.scene).append("\n");
+                    text.append(res.faceData).append("\n");
 
                     if(getActivity()!=null)
                         getActivity().runOnUiThread(() -> {

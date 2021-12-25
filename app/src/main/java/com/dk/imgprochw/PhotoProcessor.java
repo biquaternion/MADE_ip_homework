@@ -1,14 +1,20 @@
 package com.dk.imgprochw;
 
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
 import android.app.Activity;
 import android.content.Context;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.graphics.PointF;
 import android.graphics.Rect;
 import android.location.Address;
 import android.location.Geocoder;
+import android.media.FaceDetector;
+import android.media.FaceDetector.Face;
 import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
@@ -16,7 +22,7 @@ import android.util.Log;
 import com.dk.imgprochw.db.EXIFData;
 import com.dk.imgprochw.db.ImageAnalysisResults;
 import com.dk.imgprochw.db.RectFloat;
-import com.dk.imgprochw.db.SceneData;
+import com.dk.imgprochw.db.FaceData;
 
 import java.io.EOFException;
 import java.io.File;
@@ -45,10 +51,10 @@ public class PhotoProcessor {
      */
     private static final String TAG = "PhotoProcessor";
 
-    private FaceAttrTfLiteClassifier faceAttrClassifier;
+    private FaceAttrWrapper faceAttrWrapper;
 
-    private ConcurrentHashMap<String, SceneData> scenes = new ConcurrentHashMap<>();
-    private static final String IMAGE_SCENES_FILENAME = "image_scenes";
+    private ConcurrentHashMap<String, FaceData> faceAttrs = new ConcurrentHashMap<>();
+    private static final String IMAGE_FACE_ATTRS_FILENAME = "image_scenes";
 
     private ConcurrentHashMap<String, EXIFData> exifs = new ConcurrentHashMap<>();
     private static final String IMAGE_EXIF_FILENAME = "image_exif";
@@ -83,7 +89,7 @@ public class PhotoProcessor {
 
     private void loadModels() {
         try {
-            faceAttrClassifier = new FaceAttrTfLiteClassifier(context);
+            faceAttrWrapper = new FaceAttrWrapper(context);
         } catch (IOException e) {
             Log.e(TAG, "Failed to load ScenesTfClassifier.", e);
         }
@@ -143,15 +149,15 @@ public class PhotoProcessor {
 
     private void loadImageResults() {
         context.deleteFile("image_scenes");
-        scenes = readObjectMap(context, IMAGE_SCENES_FILENAME);
+        faceAttrs = readObjectMap(context, IMAGE_FACE_ATTRS_FILENAME);
         exifs = readObjectMap(context, IMAGE_EXIF_FILENAME);
         if (resetScenesModel) {
-            scenes = new ConcurrentHashMap<>();
-            context.deleteFile(IMAGE_SCENES_FILENAME);
+            faceAttrs = new ConcurrentHashMap<>();
+            context.deleteFile(IMAGE_FACE_ATTRS_FILENAME);
         }
         try {
-            if (scenes.isEmpty()) {
-                ObjectOutputStream os = new ObjectOutputStream(context.openFileOutput(IMAGE_SCENES_FILENAME, Context.MODE_PRIVATE));
+            if (faceAttrs.isEmpty()) {
+                ObjectOutputStream os = new ObjectOutputStream(context.openFileOutput(IMAGE_FACE_ATTRS_FILENAME, Context.MODE_PRIVATE));
                 os.writeObject("topCategories");
                 os.close();
             }
@@ -166,14 +172,32 @@ public class PhotoProcessor {
         }
     }
 
-    private synchronized SceneData classifyScenes(Bitmap bmp, StringBuilder text) {
+    private synchronized FaceData classifyFaceAttributes(Bitmap bmp, StringBuilder text) {
         long startTime = SystemClock.uptimeMillis();
-        Bitmap scenesBitmap = Bitmap.createScaledBitmap(bmp, faceAttrClassifier.getImageSizeX(), faceAttrClassifier.getImageSizeY(), false);
-        SceneData scene = (SceneData) faceAttrClassifier.classifyFrame(scenesBitmap);
-        long sceneTimeCost = SystemClock.uptimeMillis() - startTime;
-        Log.i(TAG, "Timecost to run scene model inference: " + Long.toString(sceneTimeCost));
-        text.append("Scenes:").append(sceneTimeCost).append(" ms\n");
-        return scene;
+        Bitmap fdBitmap = bmp.copy(Bitmap.Config.RGB_565, true);
+        FaceDetector faceDetector = new FaceDetector(fdBitmap.getWidth(), fdBitmap.getHeight(), 1);
+        Face[] faces = new Face[1];
+        int numberFaces = faceDetector.findFaces(fdBitmap, faces);
+        if (numberFaces > 0) {
+            // get face rect
+            PointF midPoint = new PointF();
+            faces[0].getMidPoint(midPoint);
+            float ed = faces[0].eyesDistance();
+            int t = max(0, (int)(midPoint.y - ed * 3));
+            int l = max(0, (int)(midPoint.x - ed * 2));
+            int b = min(bmp.getHeight(), (int)(midPoint.y + ed * 3));
+            int r = min(bmp.getWidth(), (int)(midPoint.x + ed * 2));
+
+
+            Bitmap croppedBitmap = Bitmap.createBitmap(bmp, l, t, r - l, b - t);
+            Bitmap scenesBitmap = Bitmap.createScaledBitmap(croppedBitmap, faceAttrWrapper.getImageSizeX(), faceAttrWrapper.getImageSizeY(), false);
+            FaceData faceAttr = (FaceData) faceAttrWrapper.classifyFrame(scenesBitmap);
+            long sceneTimeCost = SystemClock.uptimeMillis() - startTime;
+            Log.i(TAG, "Timecost to run face attributes model inference: " + Long.toString(sceneTimeCost));
+            text.append("Scenes:").append(sceneTimeCost).append(" ms\n");
+            return faceAttr;
+        }
+        return new FaceData();
     }
 
     private Bitmap cropBitmap(Bitmap bmp, RectFloat bbox_f){
@@ -181,7 +205,7 @@ public class PhotoProcessor {
                 (int) (bbox_f.right * bmp.getWidth()), (int) (bbox_f.bottom * bmp.getHeight()));
 
         int dw = 0; //Math.max(10,bbox.width() / 8);
-        int dh = Math.max(10,bbox.height() / 8); //15;//Math.max(10,bbox.height() / 8);
+        int dh = max(10,bbox.height() / 8); //15;//Math.max(10,bbox.height() / 8);
         int x = bbox.left - dw;
         if (x < 0)
             x = 0;
@@ -201,9 +225,9 @@ public class PhotoProcessor {
     public ImageAnalysisResults getImageAnalysisResultsWOCache(String filename, Bitmap bmp, StringBuilder text) {
         if (bmp == null)
             bmp = loadBitmap(filename);
-        SceneData scene = classifyScenes(bmp, text);
+        FaceData faceAttr = classifyFaceAttributes(bmp, text);
         EXIFData exifData=getEXIFData(filename);
-        ImageAnalysisResults res = new ImageAnalysisResults(filename, scene, exifData);
+        ImageAnalysisResults res = new ImageAnalysisResults(filename, faceAttr, exifData);
         return res;
     }
 
@@ -212,20 +236,20 @@ public class PhotoProcessor {
     {
         String key = getKey(filename);
 
-        SceneData scene=null;
-        if (!scenes.containsKey(key)) {
+        FaceData faceAttr=null;
+        if (!faceAttrs.containsKey(key)) {
             if(needScene) {
                 if (bmp == null)
                     bmp = loadBitmap(filename);
-                scene = classifyScenes(bmp, text);
-                save(context, IMAGE_SCENES_FILENAME, scenes, key, scene);
+                faceAttr = classifyFaceAttributes(bmp, text);
+                save(context, IMAGE_FACE_ATTRS_FILENAME, faceAttrs, key, faceAttr);
             }
         }
         else
-            scene=scenes.get(key);
+            faceAttr= faceAttrs.get(key);
 
         EXIFData exifData=getEXIFData(filename);
-        ImageAnalysisResults res = new ImageAnalysisResults(filename, scene,exifData);
+        ImageAnalysisResults res = new ImageAnalysisResults(filename, faceAttr,exifData);
         return res;
     }
 
@@ -315,7 +339,7 @@ public class PhotoProcessor {
 
 
     public int getHighLevelCategory(String category) {
-        int res = faceAttrClassifier.getHighLevelCategory(category);
+        int res = faceAttrWrapper.getHighLevelCategory(category);
         return res;
     }
 

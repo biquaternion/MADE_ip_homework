@@ -1,6 +1,5 @@
 package com.dk.imgprochw;
 
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
@@ -16,6 +15,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.dk.imgprochw.db.ImageAnalysisResults;
 
@@ -34,7 +34,7 @@ public class MainActivity extends FragmentActivity {
     private static final String TAG = "MainActivity";
     private final int REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS = 124;
 
-    private HighLevelVisualPreferences preferencesFragment;
+    private FaceAttrVisualPreferences preferencesFragment;
     private Photos photosFragment;
 
     private ProgressBar progressBar;
@@ -45,6 +45,7 @@ public class MainActivity extends FragmentActivity {
     private ArrayList<String> photosFilenames;
     private int currentPhotoIndex = 0;
     private PhotoProcessor photoProcessor = null;
+    private boolean processingDone = false;
 
     private String[] categoryList;
 
@@ -66,7 +67,7 @@ public class MainActivity extends FragmentActivity {
         //checkServerSettings();
         categoryList = getResources().getStringArray(R.array.category_list);
 
-        for (int i = 0; i < categoryList.length - 1; ++i) {
+        for (int i = 0; i < categoryList.length; ++i) {
             categoriesHistograms.add(new HashMap<>());
         }
 
@@ -83,10 +84,11 @@ public class MainActivity extends FragmentActivity {
 
         photoProcessingThread = new Thread(() -> {
             processAllPhotos();
+            processingDone = true;
         }, "photo-processing-thread");
         progressBar.setVisibility(View.VISIBLE);
 
-        preferencesFragment = new HighLevelVisualPreferences();
+        preferencesFragment = new FaceAttrVisualPreferences();
         Bundle prefArgs = new Bundle();
         prefArgs.putInt("color", Color.GREEN);
         prefArgs.putString("title", "High-Level topCategories");
@@ -108,6 +110,9 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void processAllPhotos() {
+        if (processingDone) {
+            return;
+        }
         //ImageAnalysisResults previousPhotoProcessedResult=null;
         for (; currentPhotoIndex < photosTaken.size(); ++currentPhotoIndex) {
             String filename = photosFilenames.get(currentPhotoIndex);
@@ -142,10 +147,11 @@ public class MainActivity extends FragmentActivity {
         String location = results.locations.description;
         List<Map<String, Map<String, Set<String>>>> newCategoriesHistograms = deepCopyCategories(categoriesHistograms);
 
-        List<String> scenes = results.scene.getMostReliableCategories();
-        for (String scene : scenes) {
-            updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(scene), scene, filename);
-        }
+        String gender = results.faceData.genderLabel;
+        updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(gender), gender, filename);
+        String ethnicity = results.faceData.ethnicityLabel;
+        updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(ethnicity) + 2, ethnicity, filename);
+
         if (location != null)
             updateCategory(newCategoriesHistograms, newCategoriesHistograms.size() - 1, location, filename);
 
@@ -218,5 +224,37 @@ public class MainActivity extends FragmentActivity {
             }
         }
         return true;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        switch (requestCode) {
+            case REQUEST_CODE_ASK_MULTIPLE_PERMISSIONS:
+                Map<String, Integer> perms = new HashMap<String, Integer>();
+                boolean allGranted = true;
+                for (int i = 0; i < permissions.length; i++) {
+                    perms.put(permissions[i], grantResults[i]);
+                    if (grantResults[i] != PackageManager.PERMISSION_GRANTED)
+                        allGranted = false;
+                }
+                // Check for ACCESS_FINE_LOCATION
+                if (allGranted) {
+                    // All Permissions Granted
+                    init();
+                } else {
+                    // Permission Denied
+                    Toast.makeText(MainActivity.this, "Some Permission is Denied", Toast.LENGTH_SHORT)
+                            .show();
+                    finish();
+                }
+                break;
+            default:
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
     }
 }
