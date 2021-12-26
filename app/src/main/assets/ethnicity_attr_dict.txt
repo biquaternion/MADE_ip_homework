@@ -1,5 +1,5 @@
 white=0
 black=1
-eth3=2
+asian=2
 eth4=3
 eth5=4

@@ -30,11 +30,14 @@ public class FaceAttrWrapper {
 
     private static final String GENDER_ATTR_FILENAME = "gender_attr_dict.txt";
     private static final String ETHNICITY_ATTR_FILENAME = "ethnicity_attr_dict.txt";
+    private static final String AGE_ATTR_FILENAME = "age_attr_dict.txt";
 
     public TreeMap<String, Integer> genderLabels2Index = new TreeMap<>();
     private ArrayList<String> genderLabels = new ArrayList<String>();
     public TreeMap<String, Integer> ethnicityLabels2Index = new TreeMap<>();
     private ArrayList<String> ethnicityLabels = new ArrayList<String>();
+    public TreeMap<String, Integer> ageLabels2Index = new TreeMap<>();
+    private ArrayList<String> ageLabels = new ArrayList<String>();
     private Map<String, Integer> labels2HighLevelCategories = new HashMap<>();
     private Set<Integer> filteredIndices = new HashSet<>();
 
@@ -112,6 +115,39 @@ public class FaceAttrWrapper {
             }
         } catch (IOException e) {
             throw new RuntimeException("Problem reading ethnicity label file!", e);
+        }
+        try {
+            br = new BufferedReader(new InputStreamReader(context.getAssets().open(AGE_ATTR_FILENAME)));
+            String line;
+            int line_ind = 0;
+            while ((line = br.readLine()) != null) {
+                ++line_ind;
+                line = line.split("#")[0].trim(); // skip comment
+                String[] categoryInfo = line.split("=");
+                String category = categoryInfo[0]; // category name (male/female)
+                ageLabels.add(category);
+
+                int highLevelCategory = Integer.parseInt(categoryInfo[1]); // category label
+                labels2HighLevelCategories.put(category, highLevelCategory);
+            }
+            br.close();
+
+            TreeSet<String> labelsSorted = new TreeSet<>();
+            for (int i = 0; i < ageLabels.size(); ++i) {
+                if (filteredIndices.contains(i))
+                    continue;
+                String ethnicity = ageLabels.get(i);
+                if (!labelsSorted.contains(ethnicity))
+                    labelsSorted.add(ethnicity);
+            }
+
+            int index = 0;
+            for (String label : labelsSorted) {
+                ageLabels2Index.put(label, index);
+                ++index;
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Problem reading age label file!", e);
         }
     }
 

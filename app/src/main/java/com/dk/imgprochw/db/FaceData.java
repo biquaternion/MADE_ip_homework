@@ -16,6 +16,7 @@ public class FaceData implements ClassifierResult, Serializable {
     public float genderScore;
     public String ethnicityLabel;
     public float ethnicityScore;
+    public String ageLabel;
     public int age;
     public float ageScore;
 
@@ -31,6 +32,18 @@ public class FaceData implements ClassifierResult, Serializable {
         this.ethnicityScore = ethnicityScore;
         this.age = age;
         this.ageScore = ageScore;
+
+        if (age < 20) {
+            ageLabel = "under20";
+        } else if (age < 30) {
+            ageLabel = "20to30";
+        } else if (age < 40) {
+            ageLabel = "30to40";
+        } else if (age < 50) {
+            ageLabel = "40to50";
+        } else {
+            ageLabel = "50+";
+        }
     }
 
     public String toString() {

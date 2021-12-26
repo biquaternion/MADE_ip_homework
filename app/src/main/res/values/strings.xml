@@ -23,9 +23,14 @@
         <item>female</item>
         <item>white</item>
         <item>black</item>
-        <item>eth3</item>
+        <item>asian</item>
         <item>eth4</item>
         <item>eth5</item>
+        <item>under20</item>
+        <item>20to30</item>
+        <item>30to40</item>
+        <item>40to50</item>
+        <item>50+</item>
     </string-array>
     <string name="server_config">...</string>
 </resources>

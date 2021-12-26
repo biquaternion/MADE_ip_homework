@@ -148,9 +148,15 @@ public class MainActivity extends FragmentActivity {
         List<Map<String, Map<String, Set<String>>>> newCategoriesHistograms = deepCopyCategories(categoriesHistograms);
 
         String gender = results.faceData.genderLabel;
-        updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(gender), gender, filename);
+        int genderOffset = 0;
+        updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(gender) + genderOffset, gender, filename);
         String ethnicity = results.faceData.ethnicityLabel;
-        updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(ethnicity) + 2, ethnicity, filename);
+        int ethnicityOffset = 2;
+        updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(ethnicity) + ethnicityOffset, ethnicity, filename);
+        String age = results.faceData.ageLabel;
+        int ageOffset = 7;
+        updateCategory(newCategoriesHistograms, photoProcessor.getHighLevelCategory(age) + ageOffset, age, filename);
+
 
         if (location != null)
             updateCategory(newCategoriesHistograms, newCategoriesHistograms.size() - 1, location, filename);
@@ -173,6 +179,9 @@ public class MainActivity extends FragmentActivity {
     }
 
     private void updateCategory(List<Map<String, Map<String, Set<String>>>> histos, int highLevelCategory, String category, String filename) {
+        if (category == null) {
+            return;
+        }
         if (highLevelCategory >= 0) {
             Map<String, Map<String, Set<String>>> histo = histos.get(highLevelCategory);
             if (!histo.containsKey(category)) {
